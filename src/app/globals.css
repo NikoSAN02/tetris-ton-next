@@ -31,3 +31,100 @@ body {
     text-wrap: balance;
   }
 }
+/* Container for the entire Tetris game */
+.tetris-container {
+  display: flex;
+  justify-content: space-around; /* Space between elements */
+  align-items: flex-start;
+}
+
+/* Gameboard styling */
+.gameboard {
+  display: grid;
+  grid-template-columns: repeat(10, 2em); /* Adjust grid size for gameboard */
+  grid-auto-rows: 2em;
+  grid-gap: 0.1em;
+  background-color: #222; /* Dark background */
+  padding: 0.5em;
+}
+
+/* Held piece preview box */
+.held-piece {
+  display: grid;
+  grid-template-columns: repeat(4, 2em); /* Adjust grid size for held pieces */
+  grid-gap: 0.1em;
+  margin-bottom: 1em;
+}
+
+/* Piece queue styling */
+.piece-queue {
+  display: grid;
+  grid-template-columns: repeat(4, 2em); /* Adjust grid size for queue */
+  grid-gap: 0.1em;
+  margin-top: 1em;
+}
+
+/* Stats styling (Points, Lines Cleared) */
+.stats {
+  margin-left: 1em;
+  color: white;
+  text-align: left;
+}
+
+/* General game block styling */
+.game-block {
+  width: 2em;
+  height: 2em;
+  border: 0.1em solid #ddd;
+}
+
+/* Piece color styling */
+.piece-i {
+  background-color: #ec858b;
+}
+
+.piece-j {
+  background-color: #f1b598;
+}
+
+.piece-l {
+  background-color: #f8efae;
+}
+
+.piece-o {
+  background-color: #b5a677;
+}
+
+.piece-s {
+  background-color: #816e56;
+}
+
+.piece-t {
+  background-color: #b77c72;
+}
+
+.piece-z {
+  background-color: #e3be58;
+}
+
+.piece-preview {
+  background-color: #eee;
+}
+
+/* Game over styling */
+.game-over {
+  text-align: center;
+  color: white;
+}
+
+button {
+  background-color: #ec858b;
+  color: white;
+  border: none;
+  padding: 0.5em 1em;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #f1b598;
+}
