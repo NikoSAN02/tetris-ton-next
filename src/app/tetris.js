@@ -2,17 +2,48 @@
 import React, { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import styles from './Tetriss.module.css'; // Adjust the path as needed
-
+import { sendTokens } from './sending';
+import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
+import TonWeb from 'tonweb';
 // Dynamically import Tetris with no SSR
 const Tetris = dynamic(() => import('react-tetris'), { ssr: false });
 
 const Tetriss = () => {
   const [isClient, setIsClient] = useState(false);
-
+  const [tonConnectUI] = useTonConnectUI();
+  const userAddress = useTonAddress();
   useEffect(() => {
     // Set to true only on the client side
     setIsClient(true);
   }, []);
+  
+  const handleSendTokens = async (points) => {
+    if (!tonConnectUI.connected) {
+      console.error('Wallet not connected');
+      return;
+    }
+
+    const tokenAmount = points / 1; // 1 token for every 1000 points
+
+    try {
+      const transaction = {
+        validUntil: Math.floor(Date.now() / 1000) + 60 * 20, // Valid for 20 minutes
+        messages: [
+          {
+            address: userAddress,
+            amount: TonWeb.utils.toNano(tokenAmount.toString()),
+          },
+        ],
+      };
+
+      const result = await tonConnectUI.sendTransaction(transaction);
+      console.log('Transaction sent:', result);
+      // You might want to add some user feedback here, like a success message
+    } catch (error) {
+      console.error('Failed to send transaction:', error);
+      // You might want to add some user feedback here, like an error message
+    }
+  };
 
   if (!isClient) {
     return <div>Loading...</div>; // Or any other loading indication
@@ -96,6 +127,12 @@ const Tetriss = () => {
                       onClick={controller.restart}
                     >
                       New Game
+                    </button>
+                    <button
+                      className="button bg-red-400 text-white border-none px-4 py-2 cursor-pointer hover:bg-orange-400"
+                      onClick={() => handleSendTokens(points)}
+                    >
+                      claim
                     </button>
                   </div>
                 </div>
