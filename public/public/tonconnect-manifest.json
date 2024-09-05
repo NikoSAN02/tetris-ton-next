@@ -1,5 +1,5 @@
 {
-    "url": "https://localhost:3000/",
-    "name": "evmwarfare",
+    "url": "https://tetris-ton-next-test.vercel.app/",
+    "name": "tontetris",
     "iconUrl": "https://ton-connect.github.io/demo-dapp-with-react-ui/apple-touch-icon.png"
 }
