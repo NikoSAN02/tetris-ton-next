@@ -5,9 +5,10 @@ import styles from './Tetriss.module.css'; // Adjust the path as needed
 import { sendTokens } from './sending';
 import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
 import TonWeb from 'tonweb';
+
 // Dynamically import Tetris with no SSR
 const Tetris = dynamic(() => import('react-tetris'), { ssr: false });
-
+const tonweb = new TonWeb(new TonWeb.HttpProvider('https://toncenter.com/api/v2/jsonRPC'));
 const Tetriss = () => {
   const [isClient, setIsClient] = useState(false);
   const [tonConnectUI] = useTonConnectUI();
@@ -26,22 +27,44 @@ const Tetriss = () => {
     const tokenAmount = points / 1; // 1 token for every 1000 points
 
     try {
-      const transaction = {
+      // Create a wallet instance
+      const wallet = tonweb.wallet.create({ address: userAddress });
+
+      // Get the current seqno
+      const seqno = await wallet.methods.seqno().call();
+
+      // Prepare the transaction
+      const transaction = await wallet.methods.transfer({
+        secretKey: new Uint8Array(32), // This should be the user's secret key, but we don't have access to it
+        toAddress: userAddress,
+        amount: TonWeb.utils.toNano(tokenAmount.toString()),
+        seqno: seqno,
+        payload: 'Tetris Reward',
+        sendMode: 3,
+      }).getQuery();
+
+      // Convert the transaction to BOC (Bag of Cells) format
+      const boc = TonWeb.utils.bytesToBase64(await transaction.toBoc(false));
+
+      // Send the transaction using TonConnect
+      const result = await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 60 * 20, // Valid for 20 minutes
+        from: userAddress,
+        network: 'testnet', // or 'testnet' if you're using testnet
         messages: [
           {
             address: userAddress,
             amount: TonWeb.utils.toNano(tokenAmount.toString()),
+            payload: boc,
           },
         ],
-      };
+      });
 
-      const result = await tonConnectUI.sendTransaction(transaction);
       console.log('Transaction sent:', result);
-      // You might want to add some user feedback here, like a success message
+      // Add user feedback here (e.g., success message)
     } catch (error) {
       console.error('Failed to send transaction:', error);
-      // You might want to add some user feedback here, like an error message
+      // Add user feedback here (e.g., error message)
     }
   };
 
