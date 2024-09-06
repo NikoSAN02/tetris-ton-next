@@ -5,66 +5,81 @@ import styles from './Tetriss.module.css'; // Adjust the path as needed
 import { sendTokens } from './sending';
 import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
 import TonWeb from 'tonweb';
-
+import { TonClient, WalletContractV4, internal } from "@ton/ton";
+import { mnemonicNew, mnemonicToPrivateKey } from "@ton/crypto";
 // Dynamically import Tetris with no SSR
 const Tetris = dynamic(() => import('react-tetris'), { ssr: false });
-const tonweb = new TonWeb(new TonWeb.HttpProvider('https://toncenter.com/api/v2/jsonRPC'));
+const client = new TonClient({
+  endpoint: 'https://toncenter.com/api/v2/jsonRPC',
+});
 const Tetriss = () => {
   const [isClient, setIsClient] = useState(false);
   const [tonConnectUI] = useTonConnectUI();
   const userAddress = useTonAddress();
+  const [transactionStatus, setTransactionStatus] = useState(null);
+  const [wallet, setWallet] = useState(null);
+  const [keyPair, setKeyPair] = useState(null);
   useEffect(() => {
     // Set to true only on the client side
     setIsClient(true);
+    initializeWallet();
   }, []);
   
+  const initializeWallet = async () => {
+    try {
+      // Generate new key
+      let mnemonics = await mnemonicNew();
+      let kp = await mnemonicToPrivateKey(mnemonics);
+      setKeyPair(kp);
+
+      // Create wallet contract
+      let workchain = 0;
+      let w = WalletContractV4.create({ workchain, publicKey: kp.publicKey });
+      setWallet(w);
+
+      console.log("Wallet initialized");
+    } catch (error) {
+      console.error("Failed to initialize wallet:", error);
+    }
+  };
+
   const handleSendTokens = async (points) => {
-    if (!tonConnectUI.connected) {
-      console.error('Wallet not connected');
+    if (!wallet || !keyPair) {
+      console.error('Wallet not initialized');
+      setTransactionStatus('error');
       return;
     }
 
-    const tokenAmount = points / 1; // 1 token for every 1000 points
+    setTransactionStatus('sending');
+    const tokenAmount = points / 1000; // 1 token for every 1000 points
 
     try {
-      // Create a wallet instance
-      const wallet = tonweb.wallet.create({ address: userAddress });
+      let contract = client.open(wallet);
+      
+      // Get balance
+      let balance = await contract.getBalance();
+      console.log("Wallet balance:", balance.toString());
 
-      // Get the current seqno
-      const seqno = await wallet.methods.seqno().call();
-
-      // Prepare the transaction
-      const transaction = await wallet.methods.transfer({
-        secretKey: new Uint8Array(32), // This should be the user's secret key, but we don't have access to it
-        toAddress: userAddress,
-        amount: TonWeb.utils.toNano(tokenAmount.toString()),
-        seqno: seqno,
-        payload: 'Tetris Reward',
-        sendMode: 3,
-      }).getQuery();
-
-      // Convert the transaction to BOC (Bag of Cells) format
-      const boc = TonWeb.utils.bytesToBase64(await transaction.toBoc(false));
-
-      // Send the transaction using TonConnect
-      const result = await tonConnectUI.sendTransaction({
-        validUntil: Math.floor(Date.now() / 1000) + 60 * 20, // Valid for 20 minutes
-        from: userAddress,
-        network: 'testnet', // or 'testnet' if you're using testnet
-        messages: [
-          {
-            address: userAddress,
-            amount: TonWeb.utils.toNano(tokenAmount.toString()),
-            payload: boc,
-          },
-        ],
+      // Create a transfer
+      let seqno = await contract.getSeqno();
+      let transfer = await contract.createTransfer({
+        seqno,
+        secretKey: keyPair.secretKey,
+        messages: [internal({
+          value: tokenAmount.toString(),
+          to: userAddress, // Sending to the user's connected wallet
+          body: 'Tetris Reward',
+        })]
       });
 
-      console.log('Transaction sent:', result);
-      // Add user feedback here (e.g., success message)
+      // Send the transfer
+      await client.sendExternalMessage(wallet, transfer);
+
+      console.log('Transaction sent');
+      setTransactionStatus('success');
     } catch (error) {
       console.error('Failed to send transaction:', error);
-      // Add user feedback here (e.g., error message)
+      setTransactionStatus('error');
     }
   };
 
