@@ -1,91 +1,81 @@
 "use client"
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import styles from './Tetriss.module.css'; // Adjust the path as needed
-import { sendTokens } from './sending';
+import styles from './Tetriss.module.css';
 import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
-import TonWeb from 'tonweb';
 import { TonClient, WalletContractV4, internal } from "@ton/ton";
 import { mnemonicNew, mnemonicToPrivateKey } from "@ton/crypto";
-// Dynamically import Tetris with no SSR
-const Tetris = dynamic(() => import('react-tetris'), { ssr: false });
-const client = new TonClient({
-  endpoint: 'https://toncenter.com/api/v2/jsonRPC',
+import axios from 'axios';
+import TonConnect from '@tonconnect/sdk';
+import { Address, beginCell, toNano } from 'ton-core';
+
+// TonConnect initialization
+const connector = new TonConnect({
+  manifestUrl: 'http://localhost:3000', // URL to your app's manifest.json
 });
-const Tetriss = () => {
-  const [isClient, setIsClient] = useState(false);
-  const [tonConnectUI] = useTonConnectUI();
-  const userAddress = useTonAddress();
-  const [transactionStatus, setTransactionStatus] = useState(null);
-  const [wallet, setWallet] = useState(null);
-  const [keyPair, setKeyPair] = useState(null);
-  useEffect(() => {
-    // Set to true only on the client side
-    setIsClient(true);
-    initializeWallet();
-  }, []);
-  
-  const initializeWallet = async () => {
-    try {
-      // Generate new key
-      let mnemonics = await mnemonicNew();
-      let kp = await mnemonicToPrivateKey(mnemonics);
-      setKeyPair(kp);
 
-      // Create wallet contract
-      let workchain = 0;
-      let w = WalletContractV4.create({ workchain, publicKey: kp.publicKey });
-      setWallet(w);
 
-      console.log("Wallet initialized");
-    } catch (error) {
-      console.error("Failed to initialize wallet:", error);
-    }
-  };
 
-  const handleSendTokens = async (points) => {
-    if (!wallet || !keyPair) {
-      console.error('Wallet not initialized');
-      setTransactionStatus('error');
-      return;
-    }
+// Jetton master contract address
+const JETTON_MASTER_ADDRESS = 'kQAjsNKgpZNi2cZ2mOxtfEMhivMPyxmBgedqHQKCoNNYJ_FL'; // Replace with your jetton master address
+// Your wallet address (where the jettons are stored)
+const OWNER_ADDRESS = '0QChwMiVBtJA0RmYdGjKuTAm0OIQnDYoMVpI7bYRUPzh_aqS'; // Replace with your wallet address
 
-    setTransactionStatus('sending');
-    const tokenAmount = points / 1000; // 1 token for every 1000 points
-
-    try {
-      let contract = client.open(wallet);
-      
-      // Get balance
-      let balance = await contract.getBalance();
-      console.log("Wallet balance:", balance.toString());
-
-      // Create a transfer
-      let seqno = await contract.getSeqno();
-      let transfer = await contract.createTransfer({
-        seqno,
-        secretKey: keyPair.secretKey,
-        messages: [internal({
-          value: tokenAmount.toString(),
-          to: userAddress, // Sending to the user's connected wallet
-          body: 'Tetris Reward',
-        })]
-      });
-
-      // Send the transfer
-      await client.sendExternalMessage(wallet, transfer);
-
-      console.log('Transaction sent');
-      setTransactionStatus('success');
-    } catch (error) {
-      console.error('Failed to send transaction:', error);
-      setTransactionStatus('error');
-    }
-  };
-
-  if (!isClient) {
-    return <div>Loading...</div>; // Or any other loading indication
+async function claimJettons(amount) {
+  if (!connector.connected) {
+    console.error('Wallet not connected');
+    return;
   }
+
+  const userAddresss = "0QD8wp0fikBLUdqvdb3czWXCe_t78cuJrEKrteaussL7I7Zk";
+  console.log(userAddresss);
+  // Construct the jetton transfer message
+  const payload = beginCell()
+      .storeUint(0x0f8a7ea5, 32) // op code for jetton transfer
+      .storeUint(0, 64) // query id
+      .storeCoins(amount) // amount of jettons to transfer
+      .storeAddress(Address.parse(userAddresss)) // recipient address
+      .storeAddress(Address.parse(userAddresss)) // response destination
+      .storeUint(0, 1) // custom payload
+      .storeCoins(toNano('0.01')) // forward amount
+      .storeUint(0, 1) // forward payload
+      .endCell()
+      .toBoc()
+      .toString('base64');
+
+  const transaction = {
+      validUntil: Math.floor(Date.now() / 1000) + 60, // 60 seconds from now
+      messages: [
+          {
+              address: JETTON_MASTER_ADDRESS,
+              amount: toNano('0.05').toString(), // 0.05 TON for gas
+              payload: payload,
+          },
+      ],
+  };
+
+  try {
+      const result = await connector.sendTransaction(transaction);
+      console.log('Transaction sent:', result);
+  } catch (e) {
+      console.error('Failed to send transaction:', e);
+  }
+}
+
+
+const jettonAmount = BigInt(100 * 10**9); // 100 jettons (assuming 9 decimals)
+
+const Tetris = dynamic(() => import('react-tetris'), { ssr: false });
+
+
+const Tetriss = () => {
+  const [claimingTokens, setClaimingTokens] = useState(false);
+
+  const userAddress = useTonAddress();
+  
+  
+  
+  
 
   return (
     <div className='p-4 w-full flex flex-col gap-5'>
@@ -136,18 +126,18 @@ const Tetriss = () => {
               </div>
 
               <div className="flex justify-center gap-4 mt-5">
-              <button
-                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-                onClick={() => {
-                  if (state === 'PAUSED') {
-                    controller.resume(); // Resume the game if it's paused
-                  } else {
-                    controller.pause(); // Pause the game if it's running
-                  }
-                }}
-              >
-                {state === 'PAUSED' ? 'Resume' : 'Pause'}
-              </button>
+                <button
+                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                  onClick={() => {
+                    if (state === 'PAUSED') {
+                      controller.resume();
+                    } else {
+                      controller.pause();
+                    }
+                  }}
+                >
+                  {state === 'PAUSED' ? 'Resume' : 'Pause'}
+                </button>
                 <button
                   className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
                   onClick={controller.restart}
@@ -161,16 +151,17 @@ const Tetriss = () => {
                   <div className="text-center text-white">
                     <h2 className="text-4xl font-bold mb-4">Game Over</h2>
                     <button
-                      className="button bg-red-400 text-white border-none px-4 py-2 cursor-pointer hover:bg-orange-400"
+                      className="button bg-red-400 text-white border-none px-4 py-2 cursor-pointer hover:bg-orange-400 mr-2"
                       onClick={controller.restart}
                     >
                       New Game
                     </button>
                     <button
                       className="button bg-red-400 text-white border-none px-4 py-2 cursor-pointer hover:bg-orange-400"
-                      onClick={() => handleSendTokens(points)}
+                      onClick={() => claimJettons(jettonAmount)}
+                      disabled={claimingTokens}
                     >
-                      claim
+                      {claimingTokens ? 'Claiming...' : 'Claim Tokens'}
                     </button>
                   </div>
                 </div>
